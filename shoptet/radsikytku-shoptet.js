@@ -288,16 +288,19 @@
   // ============================
   // ✅ ZIP check step2
   // ============================
-  const zipCheck = () => {
-    if (!page.step2()) return;
+const zipCheck = () => {
+  if (!page.step2()) return;
 
-    const bill = q("#billZip");
-    const ship = q("#deliveryZip");
-    const chk = q("#another-shipping");
+  const bill = q("#billZip");
+  const ship = q("#deliveryZip");
+  const chk = q("#another-shipping");
+  if (!bill) return;
 
-    if (!bill) return;
-
-    const warn = document.createElement("div");
+  // ✅ vytvoř hlášku jen jednou (globálně)
+  let warn = q("#rkZipWarn");
+  if (!warn) {
+    warn = document.createElement("div");
+    warn.id = "rkZipWarn";
     warn.style.margin = "10px 0";
     warn.style.padding = "10px";
     warn.style.border = "1px solid #f5c2c7";
@@ -305,46 +308,47 @@
     warn.style.background = "#fff5f5";
     warn.style.display = "none";
     warn.textContent = "Doručujeme pouze v Brně (PSČ 60xxx–64xxx). Prosím zkontroluj PSČ.";
+  }
 
-    const okZip = (p) => /^(60|61|62|63|64)\d{3}$/.test(String(p || "").replace(/\s/g, ""));
+  const okZip = (p) => /^(60|61|62|63|64)\d{3}$/.test(String(p || "").replace(/\s/g, ""));
 
-    const activeZip = () => (chk?.checked && ship ? ship : bill);
+  const activeZip = () => (chk?.checked && ship ? ship : bill);
 
-    const place = () => {
-      const z = activeZip();
-      if (!z) return;
-      if (warn.parentNode !== z.parentNode) z.parentNode.appendChild(warn);
-    };
-
-    const validate = () => {
-      place();
-      const z = activeZip();
-      if (!z) return lock.setZip(true);
-
-      const v = (z.value || "").trim();
-      if (!v) {
-        warn.style.display = "none";
-        lock.setZip(true);
-        return;
-      }
-
-      if (okZip(v)) {
-        warn.style.display = "none";
-        lock.setZip(true);
-      } else {
-        warn.style.display = "block";
-        lock.setZip(false);
-      }
-    };
-
-    on(bill, "input", validate);
-    on(bill, "change", validate);
-    on(ship, "input", validate);
-    on(ship, "change", validate);
-    on(chk, "change", validate);
-
-    validate();
+  const place = () => {
+    const z = activeZip();
+    if (!z) return;
+    if (warn.parentNode !== z.parentNode) z.parentNode.appendChild(warn);
   };
+
+  const validate = () => {
+    place();
+    const z = activeZip();
+    if (!z) return lock.setZip(true);
+
+    const v = (z.value || "").trim();
+    if (!v) {
+      warn.style.display = "none";
+      lock.setZip(true);
+      return;
+    }
+
+    if (okZip(v)) {
+      warn.style.display = "none";
+      lock.setZip(true);
+    } else {
+      warn.style.display = "block";
+      lock.setZip(false);
+    }
+  };
+
+  on(bill, "input", validate);
+  on(bill, "change", validate);
+  on(ship, "input", validate);
+  on(ship, "change", validate);
+  on(chk, "change", validate);
+
+  validate();
+};
 
   // ============================
   // ✅ Order note fill (step1/2/3)
@@ -444,3 +448,4 @@
 
   window.addEventListener("pageshow", () => setTimeout(boot, 500));
 })();
+
