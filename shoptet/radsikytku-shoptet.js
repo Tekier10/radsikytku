@@ -296,6 +296,16 @@ const zipCheck = () => {
   const chk = q("#another-shipping");
   if (!bill) return;
 
+  // ✅ vybraný způsob dopravy (aby šlo vypnout kontrolu pro osobní odběr)
+  const shipName = () => {
+    const r = q("input[type=radio][name='shippingId']:checked");
+    if (!r) return "";
+    return (
+      q(`label[for='${r.id}'] .shipping-billing-name`)?.innerText?.trim().toLowerCase() || ""
+    );
+  };
+  const pickup = () => shipName().includes("osob");
+
   // ✅ vytvoř hlášku jen jednou (globálně)
   let warn = q("#rkZipWarn");
   if (!warn) {
@@ -321,6 +331,13 @@ const zipCheck = () => {
   };
 
   const validate = () => {
+    // ✅ osobní odběr = PSČ neřešíme vůbec
+    if (pickup()) {
+      warn.style.display = "none";
+      lock.setZip(true);
+      return;
+    }
+
     place();
     const z = activeZip();
     if (!z) return lock.setZip(true);
@@ -347,8 +364,14 @@ const zipCheck = () => {
   on(ship, "change", validate);
   on(chk, "change", validate);
 
+  // kdyby se změnila doprava i v kroku 2 (fallback)
+  on(document, "change", (e) => {
+    if (e.target?.matches("input[type=radio][name='shippingId']")) validate();
+  });
+
   validate();
 };
+
 
   // ============================
   // ✅ Order note fill (step1/2/3)
@@ -448,4 +471,5 @@ const zipCheck = () => {
 
   window.addEventListener("pageshow", () => setTimeout(boot, 500));
 })();
+
 
