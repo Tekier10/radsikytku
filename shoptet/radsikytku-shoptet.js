@@ -16,7 +16,7 @@
   const page = {
     prod: () => q("body")?.classList.contains("in-detail"),
     step1: () => q("body")?.classList.contains("in-krok-1"),
-    step2: () => q("body")?.classList.contains("in-krok-2"),
+    step2: () => q("body")?.classList.contains("in-krok-2") || q("body")?.classList.contains("in-krok-3"), // ✅ zip kontrola je na kroku 3
     step3: () => q("body")?.classList.contains("in-krok-3"),
   };
 
@@ -63,7 +63,6 @@
       const form = q("form#order-form") || q("form");
       if (!form || form.dataset.rkLock) return;
       form.dataset.rkLock = "1";
-
       form.addEventListener(
         "submit",
         (e) => {
@@ -257,18 +256,9 @@
       }
     };
 
-    on(d, "input", () => {
-      save();
-      validate();
-    });
-    on(d, "change", () => {
-      save();
-      validate();
-    });
-    on(t, "change", () => {
-      save();
-      validate();
-    });
+    on(d, "input", () => { save(); validate(); });
+    on(d, "change", () => { save(); validate(); });
+    on(t, "change", () => { save(); validate(); });
 
     on(document, "change", (e) => {
       if (e.target?.matches("input[type=radio][name='shippingId']")) {
@@ -290,7 +280,7 @@
     const chk = q("#another-shipping");
     if (!bill) return;
 
-    // ✅ pokud je Osobní odběr (shippingId=67), PSČ kontrolu vypneme
+    // ✅ osobní odběr = shippingId 67 => PSČ neřešit
     const pickup = () => (sessionStorage.getItem(RK.SH) || "") === "67";
 
     let warn = q("#rkZipWarn");
@@ -412,7 +402,10 @@
     const keys = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const k = sessionStorage.key(i);
-      if (k && (k.startsWith(RK.P) || k.startsWith(RK.N) || k === RK.DD || k === RK.DT || k === RK.SH))
+      if (
+        k &&
+        (k.startsWith(RK.P) || k.startsWith(RK.N) || k === RK.DD || k === RK.DT || k === RK.SH)
+      )
         keys.push(k);
     }
     keys.forEach((k) => sessionStorage.removeItem(k));
