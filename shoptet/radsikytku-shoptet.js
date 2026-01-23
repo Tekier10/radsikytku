@@ -7,7 +7,6 @@
     DD: "rk_delivery_date",
     DT: "rk_delivery_time",
     SH: "rk_shipping_id",
-
   };
 
   const q = (s, r = document) => r.querySelector(s);
@@ -38,13 +37,9 @@
     return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
   };
 
-  // ✅ submit buttons (Shoptet jich může mít víc)
   const submitButtons = () =>
     qa("form#order-form button[type='submit'], .next-step button, .form-actions button");
 
-  // ============================
-  // ✅ LOCK manager (ZIP + DELIVERY)
-  // ============================
   const lock = {
     ok: { zip: true, delivery: true },
 
@@ -82,9 +77,6 @@
     },
   };
 
-  // ============================
-  // ✅ Product note (per product)
-  // ============================
   const productNote = () => {
     const f = q("#product-detail-form");
     if (!f || q(".rkbox", f)) return;
@@ -116,9 +108,6 @@
     on(f, "submit", save);
   };
 
-  // ============================
-  // ✅ Delivery box in step1
-  // ============================
   const deliveryBox = () => {
     if (!page.step1()) return;
 
@@ -167,6 +156,11 @@
 
     const allOpts = qa("option", t).map((o) => o.textContent);
 
+    const storeShip = () => {
+      const r = q("input[type=radio][name='shippingId']:checked");
+      if (r) sessionStorage.setItem(RK.SH, r.value || "");
+    };
+
     const getShipName = () => {
       const r = q("input[type=radio][name='shippingId']:checked");
       if (!r) return "";
@@ -201,7 +195,6 @@
       }
     };
 
-    // restore values
     d.value = sessionStorage.getItem(RK.DD) || tomorrowISO();
     t.value = sessionStorage.getItem(RK.DT) || "";
 
@@ -228,7 +221,6 @@
       d.min = td;
       setTimeOptions(false);
 
-      // courier rules
       if (isKuryr()) {
         help.textContent = "myKurýr s.r.o.: doručení Po–Pá, nejdříve zítra.";
         d.min = tm;
@@ -241,7 +233,7 @@
         }
 
         if (date) {
-          const wd = new Date(date + "T00:00:00").getDay(); // 6=So,0=Ne
+          const wd = new Date(date + "T00:00:00").getDay();
           if (wd === 6 || wd === 0) {
             warn.style.display = "block";
             warn.textContent = "myKurýr s.r.o.: o víkendu nedoručujeme. Vyber pracovní den (Po–Pá).";
@@ -251,7 +243,6 @@
         }
       }
 
-      // pickup rules
       if (isPickup()) {
         help.textContent = "Osobní odběr: dnes jen čas v budoucnu.";
         const isToday = date === td;
@@ -280,104 +271,86 @@
     });
 
     on(document, "change", (e) => {
-      if (e.target?.matches("input[type=radio][name='shippingId']")) validate();
+      if (e.target?.matches("input[type=radio][name='shippingId']")) {
+        storeShip();
+        validate();
+      }
     });
 
     save();
+    storeShip();
     validate();
   };
 
-  // ============================
-  // ✅ ZIP check step2
-  // ============================
-const zipCheck = () => {
-  if (!page.step2()) return;
+  const zipCheck = () => {
+    if (!page.step2()) return;
 
-  const bill = q("#billZip");
-  const ship = q("#deliveryZip");
-  const chk = q("#another-shipping");
-  if (!bill) return;
+    const bill = q("#billZip");
+    const ship = q("#deliveryZip");
+    const chk = q("#another-shipping");
+    if (!bill) return;
 
-  // ✅ vybraný způsob dopravy (aby šlo vypnout kontrolu pro osobní odběr)
-  const shipName = () => {
-    const r = q("input[type=radio][name='shippingId']:checked");
-    if (!r) return "";
-    return (
-      q(`label[for='${r.id}'] .shipping-billing-name`)?.innerText?.trim().toLowerCase() || ""
-    );
-  };
-  const pickup = () => shipName().includes("osob");
+    // ✅ pokud je Osobní odběr (shippingId=67), PSČ kontrolu vypneme
+    const pickup = () => (sessionStorage.getItem(RK.SH) || "") === "67";
 
-  // ✅ vytvoř hlášku jen jednou (globálně)
-  let warn = q("#rkZipWarn");
-  if (!warn) {
-    warn = document.createElement("div");
-    warn.id = "rkZipWarn";
-    warn.style.margin = "10px 0";
-    warn.style.padding = "10px";
-    warn.style.border = "1px solid #f5c2c7";
-    warn.style.borderRadius = "10px";
-    warn.style.background = "#fff5f5";
-    warn.style.display = "none";
-    warn.textContent = "Doručujeme pouze v Brně (PSČ 60xxx–64xxx). Prosím zkontroluj PSČ.";
-  }
-
-  const okZip = (p) => /^(60|61|62|63|64)\d{3}$/.test(String(p || "").replace(/\s/g, ""));
-
-  const activeZip = () => (chk?.checked && ship ? ship : bill);
-
-  const place = () => {
-    const z = activeZip();
-    if (!z) return;
-    if (warn.parentNode !== z.parentNode) z.parentNode.appendChild(warn);
-  };
-
-  const validate = () => {
-    // ✅ osobní odběr = PSČ neřešíme vůbec
-    if (pickup()) {
+    let warn = q("#rkZipWarn");
+    if (!warn) {
+      warn = document.createElement("div");
+      warn.id = "rkZipWarn";
+      warn.style.margin = "10px 0";
+      warn.style.padding = "10px";
+      warn.style.border = "1px solid #f5c2c7";
+      warn.style.borderRadius = "10px";
+      warn.style.background = "#fff5f5";
       warn.style.display = "none";
-      lock.setZip(true);
-      return;
+      warn.textContent = "Doručujeme pouze v Brně (PSČ 60xxx–64xxx). Prosím zkontroluj PSČ.";
     }
 
-    place();
-    const z = activeZip();
-    if (!z) return lock.setZip(true);
+    const okZip = (p) => /^(60|61|62|63|64)\d{3}$/.test(String(p || "").replace(/\s/g, ""));
+    const activeZip = () => (chk?.checked && ship ? ship : bill);
 
-    const v = (z.value || "").trim();
-    if (!v) {
-      warn.style.display = "none";
-      lock.setZip(true);
-      return;
-    }
+    const place = () => {
+      const z = activeZip();
+      if (!z) return;
+      if (warn.parentNode !== z.parentNode) z.parentNode.appendChild(warn);
+    };
 
-    if (okZip(v)) {
-      warn.style.display = "none";
-      lock.setZip(true);
-    } else {
-      warn.style.display = "block";
-      lock.setZip(false);
-    }
+    const validate = () => {
+      if (pickup()) {
+        warn.style.display = "none";
+        lock.setZip(true);
+        return;
+      }
+
+      place();
+      const z = activeZip();
+      if (!z) return lock.setZip(true);
+
+      const v = (z.value || "").trim();
+      if (!v) {
+        warn.style.display = "none";
+        lock.setZip(true);
+        return;
+      }
+
+      if (okZip(v)) {
+        warn.style.display = "none";
+        lock.setZip(true);
+      } else {
+        warn.style.display = "block";
+        lock.setZip(false);
+      }
+    };
+
+    on(bill, "input", validate);
+    on(bill, "change", validate);
+    on(ship, "input", validate);
+    on(ship, "change", validate);
+    on(chk, "change", validate);
+
+    validate();
   };
 
-  on(bill, "input", validate);
-  on(bill, "change", validate);
-  on(ship, "input", validate);
-  on(ship, "change", validate);
-  on(chk, "change", validate);
-
-  // kdyby se změnila doprava i v kroku 2 (fallback)
-  on(document, "change", (e) => {
-    if (e.target?.matches("input[type=radio][name='shippingId']")) validate();
-  });
-
-  validate();
-};
-
-
-  // ============================
-  // ✅ Order note fill (step1/2/3)
-  // ============================
   const orderNote = () => {
     if (!(page.step1() || page.step2() || page.step3())) return;
 
@@ -434,22 +407,17 @@ const zipCheck = () => {
     }, 250);
   };
 
-  // ============================
-  // ✅ Cleanup on thank you page
-  // ============================
   const clean = () => {
     if (!location.pathname.includes("/dekujeme")) return;
     const keys = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const k = sessionStorage.key(i);
-      if (k && (k.startsWith(RK.P) || k.startsWith(RK.N) || k === RK.DD || k === RK.DT)) keys.push(k);
+      if (k && (k.startsWith(RK.P) || k.startsWith(RK.N) || k === RK.DD || k === RK.DT || k === RK.SH))
+        keys.push(k);
     }
     keys.forEach((k) => sessionStorage.removeItem(k));
   };
 
-  // ============================
-  // ✅ Boot
-  // ============================
   const boot = () => {
     lock.bindHardBlock();
     productNote();
@@ -460,7 +428,6 @@ const zipCheck = () => {
     lock.update();
   };
 
-  // ✅ FIX: Shoptet někdy DOM skládá postupně → spustíme boot víckrát
   const start = () => {
     boot();
     setTimeout(boot, 700);
@@ -473,6 +440,3 @@ const zipCheck = () => {
 
   window.addEventListener("pageshow", () => setTimeout(boot, 500));
 })();
-
-
-
