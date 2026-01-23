@@ -6,6 +6,8 @@
     N: "rk_name_",
     DD: "rk_delivery_date",
     DT: "rk_delivery_time",
+    SH: "rk_shipping_id",
+
   };
 
   const q = (s, r = document) => r.querySelector(s);
@@ -471,5 +473,6 @@ const zipCheck = () => {
 
   window.addEventListener("pageshow", () => setTimeout(boot, 500));
 })();
+
 
 
