@@ -262,9 +262,18 @@
       }
     };
 
-    on(d, "input", () => { save(); validate(); });
-    on(d, "change", () => { save(); validate(); });
-    on(t, "change", () => { save(); validate(); });
+    on(d, "input", () => {
+      save();
+      validate();
+    });
+    on(d, "change", () => {
+      save();
+      validate();
+    });
+    on(t, "change", () => {
+      save();
+      validate();
+    });
 
     on(document, "change", (e) => {
       if (e.target?.matches("input[type=radio][name='shippingId']")) validate();
@@ -285,10 +294,10 @@
     const chk = q("#another-shipping");
     if (!bill) return;
 
-    // ✅ tvrdá varianta: kontroluj PSČ jen pokud rekapitulace obsahuje "mykurýr"
+    // ✅ tvrdá varianta 100%: vezmeme jen blok rekapitulace dopravy/platby
     const needZip = () => {
-      const sum = q(".cart-summary") || q(".order-summary") || q(".sidebar") || document.body;
-      const txt = (sum.innerText || "").toLowerCase();
+      const recap = q("#shipping-billing-summary") || q("#summary-box") || null;
+      const txt = (recap?.innerText || "").toLowerCase();
       return txt.includes("mykurýr");
     };
 
@@ -351,6 +360,7 @@
     validate();
     setTimeout(validate, 400);
     setTimeout(validate, 900);
+    setTimeout(validate, 1600);
   };
 
   // ============================
