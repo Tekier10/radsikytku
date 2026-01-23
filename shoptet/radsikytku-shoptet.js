@@ -16,7 +16,7 @@
   const page = {
     prod: () => q("body")?.classList.contains("in-detail"),
     step1: () => q("body")?.classList.contains("in-krok-1"),
-    step2: () => q("body")?.classList.contains("in-krok-2") || q("body")?.classList.contains("in-krok-3"), // ✅ zip kontrola je na kroku 3
+    step2: () => q("body")?.classList.contains("in-krok-2") || q("body")?.classList.contains("in-krok-3"),
     step3: () => q("body")?.classList.contains("in-krok-3"),
   };
 
@@ -40,6 +40,9 @@
   const submitButtons = () =>
     qa("form#order-form button[type='submit'], .next-step button, .form-actions button");
 
+  // ============================
+  // ✅ LOCK manager (ZIP + DELIVERY)
+  // ============================
   const lock = {
     ok: { zip: true, delivery: true },
 
@@ -63,6 +66,7 @@
       const form = q("form#order-form") || q("form");
       if (!form || form.dataset.rkLock) return;
       form.dataset.rkLock = "1";
+
       form.addEventListener(
         "submit",
         (e) => {
@@ -76,6 +80,9 @@
     },
   };
 
+  // ============================
+  // ✅ Product message per item
+  // ============================
   const productNote = () => {
     const f = q("#product-detail-form");
     if (!f || q(".rkbox", f)) return;
@@ -107,6 +114,9 @@
     on(f, "submit", save);
   };
 
+  // ============================
+  // ✅ Delivery box in step1
+  // ============================
   const deliveryBox = () => {
     if (!page.step1()) return;
 
@@ -194,6 +204,7 @@
       }
     };
 
+    // restore values
     d.value = sessionStorage.getItem(RK.DD) || tomorrowISO();
     t.value = sessionStorage.getItem(RK.DT) || "";
 
@@ -214,12 +225,14 @@
         date = td;
       }
 
+      // default
       warn.style.display = "none";
       warn.textContent = "";
       help.textContent = "Uloží se do poznámky objednávky";
       d.min = td;
       setTimeOptions(false);
 
+      // courier rules
       if (isKuryr()) {
         help.textContent = "myKurýr s.r.o.: doručení Po–Pá, nejdříve zítra.";
         d.min = tm;
@@ -232,7 +245,7 @@
         }
 
         if (date) {
-          const wd = new Date(date + "T00:00:00").getDay();
+          const wd = new Date(date + "T00:00:00").getDay(); // 6=So,0=Ne
           if (wd === 6 || wd === 0) {
             warn.style.display = "block";
             warn.textContent = "myKurýr s.r.o.: o víkendu nedoručujeme. Vyber pracovní den (Po–Pá).";
@@ -242,6 +255,7 @@
         }
       }
 
+      // pickup rules
       if (isPickup()) {
         help.textContent = "Osobní odběr: dnes jen čas v budoucnu.";
         const isToday = date === td;
@@ -256,9 +270,18 @@
       }
     };
 
-    on(d, "input", () => { save(); validate(); });
-    on(d, "change", () => { save(); validate(); });
-    on(t, "change", () => { save(); validate(); });
+    on(d, "input", () => {
+      save();
+      validate();
+    });
+    on(d, "change", () => {
+      save();
+      validate();
+    });
+    on(t, "change", () => {
+      save();
+      validate();
+    });
 
     on(document, "change", (e) => {
       if (e.target?.matches("input[type=radio][name='shippingId']")) {
@@ -268,10 +291,18 @@
     });
 
     save();
+
+    // ✅ zásadní: uložit shippingId i když je doprava předvybraná automaticky
     storeShip();
+    setTimeout(storeShip, 300);
+    setTimeout(storeShip, 800);
+
     validate();
   };
 
+  // ============================
+  // ✅ ZIP check step2 / step3
+  // ============================
   const zipCheck = () => {
     if (!page.step2()) return;
 
@@ -280,9 +311,10 @@
     const chk = q("#another-shipping");
     if (!bill) return;
 
-    // ✅ osobní odběr = shippingId 67 => PSČ neřešit
-    const pickup = () => (sessionStorage.getItem(RK.SH) || "") === "67";
+    // ✅ Osobní odběr = shippingId "4" => PSČ kontrolu vypnout
+    const pickup = () => (sessionStorage.getItem(RK.SH) || "") === "4";
 
+    // ✅ vytvoř hlášku jen jednou
     let warn = q("#rkZipWarn");
     if (!warn) {
       warn = document.createElement("div");
@@ -306,6 +338,7 @@
     };
 
     const validate = () => {
+      // ✅ osobní odběr -> neřešit PSČ
       if (pickup()) {
         warn.style.display = "none";
         lock.setZip(true);
@@ -341,12 +374,16 @@
     validate();
   };
 
+  // ============================
+  // ✅ Order note fill (step1/2/3)
+  // ============================
   const orderNote = () => {
     if (!(page.step1() || page.step2() || page.step3())) return;
 
     const build = () => {
       const d = (sessionStorage.getItem(RK.DD) || "").trim();
       const t = (sessionStorage.getItem(RK.DT) || "").trim();
+
       const lines = [];
 
       if (d || t) {
@@ -379,6 +416,7 @@
     const apply = () => {
       const ta = q("#remark,textarea[name*='remark'],textarea[name*='note']");
       if (!ta) return;
+
       if (ta.value && ta.value.trim()) return;
 
       const s = build();
@@ -397,6 +435,9 @@
     }, 250);
   };
 
+  // ============================
+  // ✅ Cleanup on thank you page
+  // ============================
   const clean = () => {
     if (!location.pathname.includes("/dekujeme")) return;
     const keys = [];
@@ -411,6 +452,9 @@
     keys.forEach((k) => sessionStorage.removeItem(k));
   };
 
+  // ============================
+  // ✅ Boot (run multiple times)
+  // ============================
   const boot = () => {
     lock.bindHardBlock();
     productNote();
