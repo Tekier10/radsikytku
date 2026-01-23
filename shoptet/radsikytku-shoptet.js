@@ -275,7 +275,7 @@
   };
 
   // ============================
-  // ✅ ZIP check (disabled for pickup by recap text)
+  // ✅ ZIP check – ONLY if recap contains "mykurýr"
   // ============================
   const zipCheck = () => {
     if (!page.step2()) return;
@@ -285,10 +285,11 @@
     const chk = q("#another-shipping");
     if (!bill) return;
 
-    const isPickup = () => {
-      const sum = q(".cart-summary") || q(".order-summary") || document.body;
+    // ✅ tvrdá varianta: kontroluj PSČ jen pokud rekapitulace obsahuje "mykurýr"
+    const needZip = () => {
+      const sum = q(".cart-summary") || q(".order-summary") || q(".sidebar") || document.body;
       const txt = (sum.innerText || "").toLowerCase();
-      return txt.includes("osobní odběr");
+      return txt.includes("mykurýr");
     };
 
     let warn = q("#rkZipWarn");
@@ -314,7 +315,8 @@
     };
 
     const validate = () => {
-      if (isPickup()) {
+      // ✅ pokud není myKurýr -> vypnout kontrolu
+      if (!needZip()) {
         warn.style.display = "none";
         lock.setZip(true);
         return;
