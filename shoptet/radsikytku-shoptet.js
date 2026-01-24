@@ -1,8 +1,8 @@
 (() => {
   "use strict";
   
-  // Kontrolní výpis, že se soubor vůbec načetl
-  console.log("[RK] Skript radsikytku-shoptet.js byl načten.");
+  // Výrazný log pro kontrolu, zda se načetla nová verze
+  console.log("%c[RK] SKRIPT NAČTEN v2 (s jQuery)", "color: red; font-size: 16px; font-weight: bold;");
 
   const RK = {
     P: "rk_note_product_",
@@ -16,11 +16,8 @@
   const on = (el, ev, fn, opt) => el && el.addEventListener(ev, fn, opt);
 
   const page = {
-    // Detekce, zda jsme na detailu produktu
     prod: () => q("body") && q("body").classList.contains("in-detail"),
-    // Detekce kroku 1 (Doprava a platba)
     step1: () => q("body") && (q("body").classList.contains("in-krok-1") || q(".ordering-process")),
-    // Detekce kroku 2 nebo 3
     step2: () =>
       (q("body") && q("body").classList.contains("in-krok-2")) ||
       (q("body") && q("body").classList.contains("in-krok-3")),
@@ -37,8 +34,8 @@
     console.log("[RK] Inicializace kroku 1...");
 
     const ids = {
-      personal: ["26", "29", "25"], // ID doprav pro osobní odběr
-      courier: ["30"],              // ID doprav pro kurýra
+      personal: ["26", "29", "25"], 
+      courier: ["30"],              
     };
 
     const templates = {
@@ -72,23 +69,19 @@
     const renderDetails = (mode) => {
       let container = q("#rk_custom_details");
       
-      // Pokud kontejner neexistuje (Shoptet ho smazal při překreslení), vytvoříme ho znovu
       if (!container) {
         const anchor = q(".shipping-billing-table"); 
         if (!anchor) {
-            console.log("[RK] Nenalezen kotevní prvek .shipping-billing-table, zkouším alternativy...");
-            // Fallback, kdyby se změnila šablona
+            console.log("[RK] Nenalezen kotevní prvek .shipping-billing-table.");
             return;
         }
         
         container = document.createElement("div");
         container.id = "rk_custom_details";
-        // Vložíme ho za tabulku s dopravou
         anchor.parentNode.insertBefore(container, anchor.nextSibling);
         console.log("[RK] Vytvořen kontejner pro vlastní pole.");
       }
 
-      // Pokud se nemění mód, nic neděláme (abychom nepřepsali rozepsaná data)
       if (container.dataset.mode === mode) return;
 
       container.innerHTML = templates[mode] || "";
@@ -96,7 +89,6 @@
       
       console.log(`[RK] Zobrazen formulář pro: ${mode}`);
 
-      // Obnovení hodnot
       const savedDate = sessionStorage.getItem(RK.DD);
       const savedTime = sessionStorage.getItem(RK.DT);
       const savedName = sessionStorage.getItem(RK.N + "pickup");
@@ -105,7 +97,6 @@
       if (savedTime && q(`#${RK.DT}`)) q(`#${RK.DT}`).value = savedTime;
       if (savedName && q(`#${RK.N}pickup`)) q(`#${RK.N}pickup`).value = savedName;
 
-      // Ukládání při psaní
       const inputs = qa("#rk_custom_details input");
       inputs.forEach((i) =>
         on(i, "input", (e) => sessionStorage.setItem(e.target.id, e.target.value))
@@ -113,9 +104,8 @@
     };
 
     const handleShippingChange = (source) => {
-      // Malé zpoždění, aby Shoptet stihl překreslit DOM
+      // 200ms zpoždění, aby Shoptet stihl dokončit překreslování DOMu
       setTimeout(() => {
-          // Vždy hledáme aktuální radio buttony
           const currentRadios = qa("input[name='shippingId']");
           const selected = currentRadios.find((r) => r.checked);
 
@@ -134,17 +124,16 @@
           if (mode) {
              renderDetails(mode);
           } else {
-             // Pokud doprava není v našem seznamu, schováme pole
              const container = q("#rk_custom_details");
              if (container) container.innerHTML = "";
           }
-      }, 150); 
+      }, 200); 
     };
 
-    // 1. Spustit hned po načtení
+    // 1. Spustit hned
     handleShippingChange("init");
 
-    // 2. Naslouchat na změnu (kliknutí uživatele)
+    // 2. Change event (uživatel)
     document.addEventListener("change", (e) => {
       if (e.target && e.target.name === "shippingId") {
         console.log("[RK] Změna dopravy (uživatel).");
@@ -152,17 +141,25 @@
       }
     });
 
-    // 3. Naslouchat na překreslení Shoptetem (AJAX)
+    // 3. Shoptet event
     document.addEventListener("shoptet.content.updated", () => {
-       console.log("[RK] Shoptet aktualizoval obsah (AJAX).");
-       handleShippingChange("ajax");
+       console.log("[RK] Shoptet aktualizoval obsah (event).");
+       handleShippingChange("shoptet_event");
     });
+
+    // 4. jQuery AJAX fallback (pro jistotu zachytáváme přesně ten request, co vidíte v konzoli)
+    if (window.jQuery) {
+        window.jQuery(document).ajaxComplete((e, xhr, settings) => {
+            if (settings.url && settings.url.includes('step2CustomerAjax')) {
+                 console.log("[RK] jQuery zachytilo AJAX požadavek košíku.");
+                 handleShippingChange("jquery_ajax");
+            }
+        });
+    }
   };
 
   const build = () => {
     const lines = [];
-    
-    // Poznámky k produktům (pokud existují v session storage z předchozích kroků)
     for (let i = 0; i < sessionStorage.length; i++) {
       const k = sessionStorage.key(i);
       if (k && k.startsWith(RK.P)) {
@@ -173,7 +170,6 @@
     
     if (lines.length > 0) lines.unshift("--- Poznámky k produktům ---");
 
-    // Doprava custom pole
     const dd = sessionStorage.getItem(RK.DD);
     const dt = sessionStorage.getItem(RK.DT);
     const np = sessionStorage.getItem(RK.N + "pickup");
@@ -192,13 +188,12 @@
   const apply = () => {
       const ta = q("#remark,textarea[name*='remark'],textarea[name*='note']");
       if (!ta) return;
-      if (ta.value && ta.value.trim().length > 10) return; // Pokud už tam zákazník něco napsal, nepřepisujeme
+      if (ta.value && ta.value.trim().length > 10) return; 
 
       const s = build();
       if (!s) return;
 
       ta.value = s;
-      // Vyvolání událostí, aby Shoptet věděl, že se pole změnilo
       ta.dispatchEvent(new Event("input", { bubbles: true }));
       ta.dispatchEvent(new Event("change", { bubbles: true }));
   };
@@ -214,7 +209,6 @@
 
   const clean = () => {
     if (!location.pathname.includes("/dekujeme")) return;
-    // Vyčistíme session storage po dokončení objednávky
     const keysToRemove = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const k = sessionStorage.key(i);
@@ -225,15 +219,11 @@
   };
 
   const boot = () => {
-    // Odstraněno volání lock.bindHardBlock() a product(), které způsobovalo pád
-    
     if (page.step1()) {
         step1();
     } else if (page.step2()) {
-        // Ve 2. kroku (nebo 3. dle šablony) se data vypíší do poznámky
         runApplyLoop();
     }
-    
     clean();
   };
 
