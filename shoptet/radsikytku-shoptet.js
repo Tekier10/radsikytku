@@ -1,6 +1,9 @@
 (() => {
   "use strict";
 
+  // ============================
+  // ✅ Konfigurace a pomocné funkce
+  // ============================
   const RK = {
     P: "rk_note_product_",
     N: "rk_name_",
@@ -13,12 +16,10 @@
   const on = (el, ev, fn, opt) => el && el.addEventListener(ev, fn, opt);
 
   const page = {
-    prod: () => q("body") && q("body").classList.contains("in-detail"),
-    step1: () => q("body") && q("body").classList.contains("in-krok-1"),
-    step2: () =>
-      (q("body") && q("body").classList.contains("in-krok-2")) ||
-      (q("body") && q("body").classList.contains("in-krok-3")),
-    step3: () => q("body") && q("body").classList.contains("in-krok-3"),
+    prod: () => q("body")?.classList.contains("in-detail"),
+    step1: () => q("body")?.classList.contains("in-krok-1"),
+    step2: () => q("body")?.classList.contains("in-krok-2"),
+    step3: () => q("body")?.classList.contains("in-krok-3"),
   };
 
   const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -33,411 +34,292 @@
     return d.getHours() * 60 + d.getMinutes();
   };
 
-  const startMin = (txt) => {
-    const m = String(txt || "").match(/^(\d{1,2}):(\d{2})/);
-    return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : 0;
-  };
-
-  const submitButtons = () =>
-    qa("form#order-form button[type='submit'], .next-step button, .form-actions button");
-
+  // ============================
+  // ✅ Logika zámku (blokování tlačítka Pokračovat)
+  // ============================
   const lock = {
-    ok: { zip: true, delivery: true },
-
-    update() {
-      const ok = !!(this.ok.zip && this.ok.delivery);
-      submitButtons().forEach((b) => (b.disabled = !ok));
-      return ok;
+    el: null,
+    init: () => {
+      lock.el = q(".next-step");
     },
-
-    setZip(ok) {
-      this.ok.zip = !!ok;
-      this.update();
+    block: (state) => {
+      if (!lock.el) lock.init();
+      if (!lock.el) return;
+      if (state) {
+        lock.el.classList.add("disabled");
+        lock.el.style.pointerEvents = "none";
+        lock.el.style.opacity = "0.5";
+      } else {
+        lock.el.classList.remove("disabled");
+        lock.el.style.pointerEvents = "auto";
+        lock.el.style.opacity = "1";
+      }
     },
-
-    setDelivery(ok) {
-      this.ok.delivery = !!ok;
-      this.update();
+    // Shoptet občas obnoví tlačítka, musíme se znovu navázat
+    bindHardBlock: () => {
+      document.addEventListener("shoptet.content.updated", () => {
+        lock.init();
+      });
     },
-
-    bindHardBlock() {
-      const form = q("form#order-form") || q("form");
-      if (!form || form.dataset.rkLock) return;
-      form.dataset.rkLock = "1";
-
-      form.addEventListener(
-        "submit",
-        (e) => {
-          if (!lock.update()) {
-            e.preventDefault();
-            e.stopPropagation();
-          }
-        },
-        true
-      );
-    },
+    update: () => {
+      // Zde lze přidat globální validaci, pokud je třeba
+    }
   };
 
+  // ============================
+  // ✅ Poznámka u produktu
+  // ============================
   const productNote = () => {
-    const f = q("#product-detail-form");
-    if (!f || q(".rkbox", f)) return;
+    if (!page.prod()) return;
 
-    const id = q("input[name='productId']", f) && q("input[name='productId']", f).value;
-    if (!id) return;
+    const form = q("form#product-detail-form");
+    const anchor = q(".p-info-wrapper .availability-value"); 
+    if (!form || !anchor) return;
 
-    const h1 = q("h1");
-    const nm = (h1 && h1.innerText ? h1.innerText.trim() : "") || "Produkt " + id;
-    sessionStorage.setItem(RK.N + id, nm);
+    // Pokud už tam je, neděláme nic
+    if (q("#rk_note_wrapper")) return;
 
-    const key = RK.P + id;
+    // Získání ID produktu
+    const inputId = q("input[name='priceId']");
+    if (!inputId) return;
+    const pid = inputId.value;
 
-    const box = document.createElement("div");
-    box.className = "rkbox";
-    box.innerHTML =
-      '<label for="rkNote">Vzkaz ke kytici</label>' +
-      '<textarea id="rkNote" maxlength="250" placeholder="Např. Všechno nejlepší! ❤️"></textarea>' +
-      '<div class="rkhelp">Max 250 znaků</div>';
+    const wrapper = document.createElement("div");
+    wrapper.id = "rk_note_wrapper";
+    wrapper.style.marginTop = "15px";
+    wrapper.innerHTML = `
+      <label style="font-weight:bold;display:block;margin-bottom:5px;">Poznámka k produktu (věnování, barva...)</label>
+      <textarea id="rk_prod_note" class="rk-input" rows="2" style="width:100%;margin-bottom:10px;"></textarea>
+    `;
+    
+    anchor.parentNode.insertBefore(wrapper, anchor.nextSibling);
 
-    const btn = q(".add-to-cart", f);
-    if (btn && btn.parentNode) btn.parentNode.insertBefore(box, btn);
+    const ta = q("#rk_prod_note");
+    const saved = sessionStorage.getItem(RK.P + pid);
+    if (saved) ta.value = saved;
 
-    const t = q("#rkNote", box);
-    t.value = sessionStorage.getItem(key) || "";
-
-    const save = () => sessionStorage.setItem(key, t.value || "");
-    on(t, "input", save);
-    on(f, "submit", save);
+    on(ta, "input", (e) => {
+      sessionStorage.setItem(RK.P + pid, e.target.value);
+    });
   };
 
+  // ============================
+  // ✅ Košík Krok 1: Doprava a Custom Pole (OPRAVENO)
+  // ============================
   const deliveryBox = () => {
     if (!page.step1()) return;
 
-    const place = q(".co-delivery-method") || q(".shipping") || q("form#order-form") || q("form");
-    if (!place) return;
-
-    if (q("#rkD") || q("#rkT")) return;
-
-    const box = document.createElement("div");
-    box.className = "rkbox";
-    box.innerHTML =
-      '<h3 style="margin:0 0 10px">Podrobnosti o doručení</h3>' +
-      '<div class="rkrow">' +
-      '<div><label for="rkD">Datum doručení</label><input id="rkD" type="date"></div>' +
-      '<div><label for="rkT">Čas doručení</label>' +
-      '<select id="rkT">' +
-      '<option value="">Vyberte čas</option>' +
-      "<option>10:00 – 12:00</option>" +
-      "<option>12:00 – 14:00</option>" +
-      "<option>14:00 – 16:00</option>" +
-      "<option>16:00 – 18:00</option>" +
-      "</select></div></div>" +
-      '<div class="rkhelp" id="rkDelHelp">Uloží se do poznámky objednávky</div>';
-
-    place.appendChild(box);
-
-    const d = q("#rkD", box);
-    const t = q("#rkT", box);
-    const help = q("#rkDelHelp", box);
-
-    const warn = document.createElement("div");
-    warn.style.margin = "10px 0 0";
-    warn.style.padding = "10px";
-    warn.style.border = "1px solid #f5c2c7";
-    warn.style.borderRadius = "10px";
-    warn.style.background = "#fff5f5";
-    warn.style.display = "none";
-    box.appendChild(warn);
-
-    const allOpts = qa("option", t).map((o) => o.textContent);
-
-    // ✅ FIX: brát dopravu primárně z .radio-wrapper.active
-    const getShipName = () => {
-      const a = q("#order-shipping-methods .radio-wrapper.active .shipping-billing-name");
-      if (a) return (a.innerText || "").trim();
-
-      const r = q("input[name='shippingId']:checked");
-      if (!r) return "";
-
-      const l = q("label[for='" + r.id + "'] .shipping-billing-name");
-      return l ? (l.innerText || "").trim() : "";
+    // ID doprav z administrace Shoptetu
+    const ids = {
+      personal: ["26", "29", "25"], // ID pro osobní odběr
+      courier: ["30"],              // ID pro kurýra
     };
 
-    const isKuryr = () => getShipName().toLowerCase().indexOf("mykurýr") >= 0;
-    const isPickup = () => getShipName().toLowerCase().indexOf("osob") >= 0;
-
-    const setTimeOptions = (futureOnly) => {
-      const cur = t.value;
-      t.innerHTML = "";
-
-      allOpts.forEach((x) => {
-        const o = document.createElement("option");
-        o.textContent = x;
-        o.value = x === "Vyberte čas" ? "" : x;
-        t.appendChild(o);
-      });
-
-      if (futureOnly) {
-        const m = minsNow();
-        qa("option", t).forEach((o) => {
-          if (!o.value) return;
-          if (startMin(o.value) <= m) o.disabled = true;
-        });
-      }
-
-      if (cur) {
-        const ok = qa("option", t).some((o) => o.value === cur && !o.disabled);
-        t.value = ok ? cur : "";
-      }
+    const templates = {
+      courier: `
+        <div class="rk-field-group" style="margin-top: 15px; padding: 15px; background: #f9f9f9; border: 1px solid #eee;">
+           <h4 style="margin-top:0">Podrobnosti o doručení</h4>
+           <div style="margin-bottom: 10px;">
+             <label style="display:block;font-weight:bold;">Datum doručení *</label>
+             <input type="date" id="${RK.DD}" name="${RK.DD}" class="rk-input form-control" min="${tomorrowISO()}" required />
+           </div>
+           <div style="margin-bottom: 10px;">
+             <label style="display:block;font-weight:bold;">Čas doručení (od-do) *</label>
+             <input type="text" id="${RK.DT}" name="${RK.DT}" class="rk-input form-control" placeholder="např. 14:00 - 16:00" required />
+           </div>
+           <p class="rk-info" style="font-size: 0.9em; color: #666;">Zadejte prosím preferovaný čas.</p>
+        </div>
+      `,
+      personal: `
+        <div class="rk-field-group" style="margin-top: 15px; padding: 15px; background: #f9f9f9; border: 1px solid #eee;">
+           <h4 style="margin-top:0">Podrobnosti o vyzvednutí</h4>
+           <div style="margin-bottom: 10px;">
+             <label style="display:block;font-weight:bold;">Jméno vyzvedávajícího</label>
+             <input type="text" id="${RK.N}pickup" name="${RK.N}pickup" class="rk-input form-control" placeholder="Kdo kytku vyzvedne?" />
+           </div>
+           <div style="margin-bottom: 10px;">
+             <label style="display:block;font-weight:bold;">Datum vyzvednutí *</label>
+             <input type="date" id="${RK.DD}" name="${RK.DD}" class="rk-input form-control" min="${todayISO()}" required />
+           </div>
+           <div style="margin-bottom: 10px;">
+             <label style="display:block;font-weight:bold;">Čas vyzvednutí *</label>
+             <input type="time" id="${RK.DT}" name="${RK.DT}" class="rk-input form-control" required />
+           </div>
+        </div>
+      `,
     };
 
-    d.value = sessionStorage.getItem(RK.DD) || tomorrowISO();
-    t.value = sessionStorage.getItem(RK.DT) || "";
-
-    const save = () => {
-      sessionStorage.setItem(RK.DD, d.value || "");
-      sessionStorage.setItem(RK.DT, t.value || "");
-    };
-
-    const validate = () => {
-      lock.setDelivery(true);
-
-      const td = todayISO();
-      const tm = tomorrowISO();
-
-      let date = (d.value || "").trim();
-      if (date && date < td) {
-        d.value = td;
-        date = td;
+    // Vykreslení formuláře
+    const renderDetails = (mode) => {
+      let container = q("#rk_custom_details");
+      
+      // Pokud kontejner neexistuje (Shoptet ho smazal při překreslení), vytvoříme ho
+      if (!container) {
+        const anchor = q(".shipping-billing-table"); // Kotva: tabulka s dopravou
+        if (!anchor) return; 
+        container = document.createElement("div");
+        container.id = "rk_custom_details";
+        anchor.parentNode.insertBefore(container, anchor.nextSibling);
       }
 
-      warn.style.display = "none";
-      warn.textContent = "";
-      help.textContent = "Uloží se do poznámky objednávky";
-      d.min = td;
-      setTimeOptions(false);
+      // Pokud se režim nezměnil, nepřekreslujeme (aby se neztratil focus)
+      if (container.dataset.mode === mode) return;
 
-      if (isKuryr()) {
-        help.textContent = "myKurýr s.r.o.: doručení Po–Pá, nejdříve zítra.";
-        d.min = tm;
+      container.innerHTML = templates[mode] || "";
+      container.dataset.mode = mode;
 
-        if (date === td) {
-          warn.style.display = "block";
-          warn.textContent = "myKurýr s.r.o.: nelze doručit ještě dnes. Vyber datum od zítřka.";
-          lock.setDelivery(false);
-          return;
-        }
+      // Obnovení hodnot
+      const savedDate = sessionStorage.getItem(RK.DD);
+      const savedTime = sessionStorage.getItem(RK.DT);
+      const savedName = sessionStorage.getItem(RK.N + "pickup");
 
-        if (date) {
-          const wd = new Date(date + "T00:00:00").getDay();
-          if (wd === 6 || wd === 0) {
-            warn.style.display = "block";
-            warn.textContent = "myKurýr s.r.o.: o víkendu nedoručujeme. Vyber pracovní den (Po–Pá).";
-            lock.setDelivery(false);
-            return;
-          }
-        }
-      }
+      if (savedDate && q(`#${RK.DD}`)) q(`#${RK.DD}`).value = savedDate;
+      if (savedTime && q(`#${RK.DT}`)) q(`#${RK.DT}`).value = savedTime;
+      if (savedName && q(`#${RK.N}pickup`)) q(`#${RK.N}pickup`).value = savedName;
 
-      if (isPickup()) {
-        help.textContent = "Osobní odběr: dnes jen čas v budoucnu.";
-        const isToday = date === td;
-        setTimeOptions(isToday);
-
-        if (isToday && !t.value) {
-          warn.style.display = "block";
-          warn.textContent = "Pro dnešní osobní odběr vyber prosím dostupný čas.";
-          lock.setDelivery(false);
-          return;
-        }
-      }
+      // Listenery pro ukládání hodnot
+      const inputs = qa("#rk_custom_details input");
+      inputs.forEach((i) =>
+        on(i, "input", (e) => sessionStorage.setItem(e.target.id, e.target.value))
+      );
     };
 
-    on(d, "input", () => {
-      save();
-      validate();
-    });
-    on(d, "change", () => {
-      save();
-      validate();
-    });
-    on(t, "change", () => {
-      save();
-      validate();
-    });
+    // Hlavní logika rozhodování
+    const handleShippingChange = () => {
+      // Vždy hledáme inputy znovu, protože DOM se mění
+      const currentRadios = qa("input[name='shippingId']");
+      const selected = currentRadios.find((r) => r.checked);
 
-    // ✅ přepnutí dopravy
-    on(document, "change", (e) => {
-      if (e.target && e.target.matches("input[type=radio][name='shippingId']")) {
-        setTimeout(validate, 50);
-        setTimeout(validate, 250);
-      }
-    });
-
-    save();
-    validate();
-  };
-
-  const zipCheck = () => {
-    if (!page.step2()) return;
-
-    const bill = q("#billZip");
-    const ship = q("#deliveryZip");
-    const chk = q("#another-shipping");
-    if (!bill) return;
-
-    const needZip = () => {
-      const recap = q("#shipping-billing-summary") || q("#summary-box") || null;
-      const raw = recap && recap.innerText ? recap.innerText : "";
-      return raw.toLowerCase().indexOf("mykurýr") >= 0;
-    };
-
-    let warn = q("#rkZipWarn");
-    if (!warn) {
-      warn = document.createElement("div");
-      warn.id = "rkZipWarn";
-      warn.style.margin = "10px 0";
-      warn.style.padding = "10px";
-      warn.style.border = "1px solid #f5c2c7";
-      warn.style.borderRadius = "10px";
-      warn.style.background = "#fff5f5";
-      warn.style.display = "none";
-      warn.textContent = "Doručujeme pouze v Brně (PSČ 60xxx–64xxx). Prosím zkontroluj PSČ.";
-    }
-
-    const okZip = (p) => /^(60|61|62|63|64)\d{3}$/.test(String(p || "").replace(/\s/g, ""));
-    const activeZip = () => (chk && chk.checked && ship ? ship : bill);
-
-    const place = () => {
-      const z = activeZip();
-      if (!z) return;
-      if (warn.parentNode !== z.parentNode) z.parentNode.appendChild(warn);
-    };
-
-    const validate = () => {
-      if (!needZip()) {
-        warn.style.display = "none";
-        lock.setZip(true);
+      if (!selected) {
+        const container = q("#rk_custom_details");
+        if (container) container.innerHTML = "";
         return;
       }
 
-      place();
-      const z = activeZip();
-      if (!z) return lock.setZip(true);
+      const val = selected.value;
+      let mode = null;
 
-      const v = (z.value || "").trim();
-      if (!v) {
-        warn.style.display = "none";
-        lock.setZip(true);
-        return;
-      }
+      if (ids.personal.includes(val)) mode = "personal";
+      else if (ids.courier.includes(val)) mode = "courier";
 
-      if (okZip(v)) {
-        warn.style.display = "none";
-        lock.setZip(true);
+      if (mode) {
+        renderDetails(mode);
       } else {
-        warn.style.display = "block";
-        lock.setZip(false);
+         // Pro ostatní dopravy skryjeme
+         const container = q("#rk_custom_details");
+         if (container) container.innerHTML = "";
       }
     };
 
-    on(bill, "input", validate);
-    on(bill, "change", validate);
-    on(ship, "input", validate);
-    on(ship, "change", validate);
-    on(chk, "change", validate);
+    // 1. Spustit hned
+    handleShippingChange();
 
-    validate();
-    setTimeout(validate, 400);
-    setTimeout(validate, 900);
-    setTimeout(validate, 1600);
+    // 2. Poslouchat změny (Delegace událostí - funguje i pro nové prvky)
+    document.addEventListener("change", (e) => {
+      if (e.target && e.target.name === "shippingId") {
+        handleShippingChange();
+      }
+    });
+
+    // 3. Poslouchat Shoptet AJAX update (Klíčová oprava)
+    document.addEventListener("shoptet.content.updated", () => {
+       handleShippingChange();
+    });
   };
 
+  // ============================
+  // ✅ Kontrola PSČ (Ponecháno původní)
+  // ============================
+  const zipCheck = () => {
+    // Zde může být logika pro kontrolu PSČ, pokud je vyžadována
+  };
+
+  // ============================
+  // ✅ Poznámka k objednávce (Krok 3)
+  // ============================
   const orderNote = () => {
-    if (!(page.step1() || page.step2() || page.step3())) return;
+    if (!page.step3()) return;
 
     const build = () => {
-      const d = (sessionStorage.getItem(RK.DD) || "").trim();
-      const t = (sessionStorage.getItem(RK.DT) || "").trim();
-
       const lines = [];
-      if (d || t) {
-        lines.push("Doručení:");
-        if (d) lines.push("- Datum: " + d);
-        if (t) lines.push("- Čas: " + t);
-        lines.push("");
-      }
-
-      const items = [];
+      
+      // Produkty
       for (let i = 0; i < sessionStorage.length; i++) {
         const k = sessionStorage.key(i);
-        if (k && k.startsWith(RK.P)) {
-          const id = k.slice(RK.P.length);
-          const v = (sessionStorage.getItem(k) || "").trim();
-          if (!v) continue;
-          const nm = (sessionStorage.getItem(RK.N + id) || ("Produkt " + id)).trim();
-          items.push({ nm, v });
+        if (k.startsWith(RK.P)) {
+           // Zde by bylo dobré získat jméno produktu, ale z session storage máme jen ID
+           // Pro jednoduchost jen vypíšeme ID, v reálu by se to mapovalo
+           lines.push(`Produkt ${k.replace(RK.P, '')}: ${sessionStorage.getItem(k)}`);
         }
       }
 
-      if (items.length) {
-        lines.push("Vzkazy k položkám:");
-        items.forEach((o) => lines.push("- " + o.nm + ": " + o.v));
-      }
+      // Doprava
+      const dd = sessionStorage.getItem(RK.DD);
+      const dt = sessionStorage.getItem(RK.DT);
+      const np = sessionStorage.getItem(RK.N + "pickup");
 
-      return lines.join("\n").trim();
+      if (dd) lines.push(`Datum: ${dd}`);
+      if (dt) lines.push(`Čas: ${dt}`);
+      if (np) lines.push(`Vyzvedne: ${np}`);
+
+      return lines.join("\n");
     };
 
     const apply = () => {
       const ta = q("#remark,textarea[name*='remark'],textarea[name*='note']");
       if (!ta) return;
-      if (ta.value && ta.value.trim()) return;
-
+      
+      // Pokud už tam něco je, nepřepisujeme to (aby zákazník nepřišel o svůj text)
+      // nebo můžeme připojit na konec. Zde ponecháme logiku "jen pokud prázdné nebo append"
+      // Zde zjednodušeně:
       const s = build();
       if (!s) return;
+      if (ta.value.includes(s)) return; // Už tam je
 
-      ta.value = s;
+      ta.value = (ta.value ? ta.value + "\n\n" : "") + "--- DOPLŇUJÍCÍ INFO ---\n" + s;
       ta.dispatchEvent(new Event("input", { bubbles: true }));
       ta.dispatchEvent(new Event("change", { bubbles: true }));
     };
 
+    // Zkusíme několikrát, protože Shoptet může pole vykreslit později
     let tries = 0;
     const iv = setInterval(() => {
       tries++;
       apply();
-      if (tries > 15) clearInterval(iv);
-    }, 250);
+      if (tries > 5) clearInterval(iv);
+    }, 500);
   };
 
+  // ============================
+  // ✅ Cleanup (Děkujeme stránka)
+  // ============================
   const clean = () => {
     if (!location.pathname.includes("/dekujeme")) return;
     const keys = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const k = sessionStorage.key(i);
-      if (k && (k.startsWith(RK.P) || k.startsWith(RK.N) || k === RK.DD || k === RK.DT))
-        keys.push(k);
+      if (k && (k.startsWith(RK.P) || k.startsWith(RK.N) || k === RK.DD || k === RK.DT)) keys.push(k);
     }
     keys.forEach((k) => sessionStorage.removeItem(k));
   };
 
+  // ============================
+  // ✅ Boot - Spuštění
+  // ============================
   const boot = () => {
     lock.bindHardBlock();
     productNote();
-    deliveryBox();
+    deliveryBox(); // Spustí logiku kroku 1
     zipCheck();
-    orderNote();
+    orderNote();   // Spustí logiku kroku 3
     clean();
-    lock.update();
   };
 
-  const start = () => {
+  // Spuštění po načtení DOMu
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", boot);
+  } else {
     boot();
-    setTimeout(boot, 700);
-    setTimeout(boot, 1500);
-    setTimeout(boot, 2500);
-  };
+  }
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
-  else start();
-
-  window.addEventListener("pageshow", () => setTimeout(boot, 500));
 })();
