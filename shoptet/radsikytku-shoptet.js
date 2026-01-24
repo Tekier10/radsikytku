@@ -1,8 +1,17 @@
 (() => {
   "use strict";
   
-  // Výrazný log pro kontrolu, zda se načetla nová verze
-  console.log("%c[RK] SKRIPT NAČTEN v2 (s jQuery)", "color: red; font-size: 16px; font-weight: bold;");
+  // 1. Vizuální kontrola (Červený box na stránce)
+  // Pokud toto neuvidíte, prohlížeč má starý soubor!
+  const debugBox = document.createElement("div");
+  debugBox.style.cssText = "position:fixed;bottom:10px;left:10px;background:red;color:white;padding:15px;z-index:999999;font-weight:bold;border:2px solid white;box-shadow:0 0 10px rgba(0,0,0,0.5);";
+  debugBox.innerHTML = "RK SCRIPT V3<br>NAČTENO OK";
+  // Přidáme to do HTML hned jak to jde
+  if (document.body) document.body.appendChild(debugBox);
+  else document.addEventListener("DOMContentLoaded", () => document.body.appendChild(debugBox));
+
+  // 2. Používáme console.error, aby to bylo vidět i přes filtry
+  console.error("[RK] STARTUJE VERZE V3 (DEBUG MODE)");
 
   const RK = {
     P: "rk_note_product_",
@@ -31,7 +40,8 @@
   };
 
   const step1 = () => {
-    console.log("[RK] Inicializace kroku 1...");
+    console.error("[RK] Funkce step1 spuštěna");
+    if (debugBox) debugBox.innerHTML += "<br>Step 1 Init";
 
     const ids = {
       personal: ["26", "29", "25"], 
@@ -70,16 +80,33 @@
       let container = q("#rk_custom_details");
       
       if (!container) {
-        const anchor = q(".shipping-billing-table"); 
+        // Zkusíme najít různé záchytné body, protože šablony se liší
+        const anchors = [
+            q(".shipping-billing-table"),
+            q("#shipping-methods"),
+            q(".radio-wrapper"),
+            q(".ordering-process-step-1")
+        ];
+        
+        // Vybereme první existující
+        const anchor = anchors.find(a => a !== null);
+
         if (!anchor) {
-            console.log("[RK] Nenalezen kotevní prvek .shipping-billing-table.");
+            console.error("[RK] CRITICAL: Nenalezen žádný prvek, kam vložit pole!");
+            if (debugBox) debugBox.innerHTML += "<br>CHYBA: Nenalezen kotevní prvek";
             return;
         }
         
         container = document.createElement("div");
         container.id = "rk_custom_details";
-        anchor.parentNode.insertBefore(container, anchor.nextSibling);
-        console.log("[RK] Vytvořen kontejner pro vlastní pole.");
+        // Vložíme za nalezený prvek (nebo jeho rodiče, pokud je to radio input)
+        if (anchor.classList.contains("shipping-billing-table")) {
+             anchor.parentNode.insertBefore(container, anchor.nextSibling);
+        } else {
+             // Fallback vložení
+             anchor.appendChild(container);
+        }
+        console.error("[RK] Kontejner vytvořen");
       }
 
       if (container.dataset.mode === mode) return;
@@ -87,7 +114,7 @@
       container.innerHTML = templates[mode] || "";
       container.dataset.mode = mode;
       
-      console.log(`[RK] Zobrazen formulář pro: ${mode}`);
+      if (debugBox) debugBox.innerHTML = `RK SCRIPT V3<br>Mode: ${mode}`;
 
       const savedDate = sessionStorage.getItem(RK.DD);
       const savedTime = sessionStorage.getItem(RK.DT);
@@ -104,18 +131,20 @@
     };
 
     const handleShippingChange = (source) => {
-      // 200ms zpoždění, aby Shoptet stihl dokončit překreslování DOMu
+      // 200ms zpoždění
       setTimeout(() => {
           const currentRadios = qa("input[name='shippingId']");
           const selected = currentRadios.find((r) => r.checked);
 
           if (!selected) {
+            console.error(`[RK] ${source}: Nic nevybráno`);
             const container = q("#rk_custom_details");
             if (container) container.innerHTML = "";
             return;
           }
 
           const val = selected.value;
+          console.error(`[RK] ${source}: ID ${val}`);
           
           let mode = null;
           if (ids.personal.includes(val)) mode = "personal";
@@ -126,32 +155,26 @@
           } else {
              const container = q("#rk_custom_details");
              if (container) container.innerHTML = "";
+             if (debugBox) debugBox.innerHTML = `RK V3<br>ID ${val} (bez polí)`;
           }
       }, 200); 
     };
 
-    // 1. Spustit hned
     handleShippingChange("init");
 
-    // 2. Change event (uživatel)
     document.addEventListener("change", (e) => {
       if (e.target && e.target.name === "shippingId") {
-        console.log("[RK] Změna dopravy (uživatel).");
         handleShippingChange("change");
       }
     });
 
-    // 3. Shoptet event
     document.addEventListener("shoptet.content.updated", () => {
-       console.log("[RK] Shoptet aktualizoval obsah (event).");
        handleShippingChange("shoptet_event");
     });
 
-    // 4. jQuery AJAX fallback (pro jistotu zachytáváme přesně ten request, co vidíte v konzoli)
     if (window.jQuery) {
         window.jQuery(document).ajaxComplete((e, xhr, settings) => {
             if (settings.url && settings.url.includes('step2CustomerAjax')) {
-                 console.log("[RK] jQuery zachytilo AJAX požadavek košíku.");
                  handleShippingChange("jquery_ajax");
             }
         });
@@ -167,7 +190,6 @@
           lines.push(`${nm}: ${sessionStorage.getItem(k)}`);
       }
     }
-    
     if (lines.length > 0) lines.unshift("--- Poznámky k produktům ---");
 
     const dd = sessionStorage.getItem(RK.DD);
@@ -181,7 +203,6 @@
       if (dd) lines.push(`Datum: ${dd}`);
       if (dt) lines.push(`Čas: ${dt}`);
     }
-
     return lines.join("\n").trim();
   };
 
