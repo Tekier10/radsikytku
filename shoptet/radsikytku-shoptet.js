@@ -13,12 +13,12 @@
   const on = (el, ev, fn, opt) => el && el.addEventListener(ev, fn, opt);
 
   const page = {
-    prod: () => q("body")?.classList.contains("in-detail"),
-    step1: () => q("body")?.classList.contains("in-krok-1"),
+    prod: () => q("body") && q("body").classList.contains("in-detail"),
+    step1: () => q("body") && q("body").classList.contains("in-krok-1"),
     step2: () =>
-      q("body")?.classList.contains("in-krok-2") ||
-      q("body")?.classList.contains("in-krok-3"),
-    step3: () => q("body")?.classList.contains("in-krok-3"),
+      (q("body") && q("body").classList.contains("in-krok-2")) ||
+      (q("body") && q("body").classList.contains("in-krok-3")),
+    step3: () => q("body") && q("body").classList.contains("in-krok-3"),
   };
 
   const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -41,9 +41,6 @@
   const submitButtons = () =>
     qa("form#order-form button[type='submit'], .next-step button, .form-actions button");
 
-  // ============================
-  // ✅ LOCK manager (ZIP + DELIVERY)
-  // ============================
   const lock = {
     ok: { zip: true, delivery: true },
 
@@ -81,31 +78,28 @@
     },
   };
 
-  // ============================
-  // ✅ Product message per item
-  // ============================
   const productNote = () => {
     const f = q("#product-detail-form");
     if (!f || q(".rkbox", f)) return;
 
-    const id = q("input[name='productId']", f)?.value;
+    const id = q("input[name='productId']", f) && q("input[name='productId']", f).value;
     if (!id) return;
 
-    const nm = q("h1")?.innerText?.trim() || `Produkt ${id}`;
+    const h1 = q("h1");
+    const nm = (h1 && h1.innerText ? h1.innerText.trim() : "") || "Produkt " + id;
     sessionStorage.setItem(RK.N + id, nm);
 
     const key = RK.P + id;
 
     const box = document.createElement("div");
     box.className = "rkbox";
-    box.innerHTML = `
-      <label for="rkNote">Vzkaz ke kytici</label>
-      <textarea id="rkNote" maxlength="250" placeholder="Např. Všechno nejlepší! ❤️"></textarea>
-      <div class="rkhelp">Max 250 znaků</div>
-    `;
+    box.innerHTML =
+      '<label for="rkNote">Vzkaz ke kytici</label>' +
+      '<textarea id="rkNote" maxlength="250" placeholder="Např. Všechno nejlepší! ❤️"></textarea>' +
+      '<div class="rkhelp">Max 250 znaků</div>';
 
     const btn = q(".add-to-cart", f);
-    if (btn?.parentNode) btn.parentNode.insertBefore(box, btn);
+    if (btn && btn.parentNode) btn.parentNode.insertBefore(box, btn);
 
     const t = q("#rkNote", box);
     t.value = sessionStorage.getItem(key) || "";
@@ -115,9 +109,6 @@
     on(f, "submit", save);
   };
 
-  // ============================
-  // ✅ Delivery box in step1
-  // ============================
   const deliveryBox = () => {
     if (!page.step1()) return;
 
@@ -128,26 +119,19 @@
 
     const box = document.createElement("div");
     box.className = "rkbox";
-    box.innerHTML = `
-      <h3 style="margin:0 0 10px">Podrobnosti o doručení</h3>
-      <div class="rkrow">
-        <div>
-          <label for="rkD">Datum doručení</label>
-          <input id="rkD" type="date">
-        </div>
-        <div>
-          <label for="rkT">Čas doručení</label>
-          <select id="rkT">
-            <option value="">Vyberte čas</option>
-            <option>10:00 – 12:00</option>
-            <option>12:00 – 14:00</option>
-            <option>14:00 – 16:00</option>
-            <option>16:00 – 18:00</option>
-          </select>
-        </div>
-      </div>
-      <div class="rkhelp" id="rkDelHelp">Uloží se do poznámky objednávky</div>
-    `;
+    box.innerHTML =
+      '<h3 style="margin:0 0 10px">Podrobnosti o doručení</h3>' +
+      '<div class="rkrow">' +
+      '<div><label for="rkD">Datum doručení</label><input id="rkD" type="date"></div>' +
+      '<div><label for="rkT">Čas doručení</label>' +
+      '<select id="rkT">' +
+      '<option value="">Vyberte čas</option>' +
+      "<option>10:00 – 12:00</option>" +
+      "<option>12:00 – 14:00</option>" +
+      "<option>14:00 – 16:00</option>" +
+      "<option>16:00 – 18:00</option>" +
+      "</select></div></div>" +
+      '<div class="rkhelp" id="rkDelHelp">Uloží se do poznámky objednávky</div>';
 
     place.appendChild(box);
 
@@ -166,14 +150,20 @@
 
     const allOpts = qa("option", t).map((o) => o.textContent);
 
+    // ✅ FIX: brát dopravu primárně z .radio-wrapper.active
     const getShipName = () => {
-      const r = q("input[type=radio][name='shippingId']:checked");
+      const a = q("#order-shipping-methods .radio-wrapper.active .shipping-billing-name");
+      if (a) return (a.innerText || "").trim();
+
+      const r = q("input[name='shippingId']:checked");
       if (!r) return "";
-      return q(`label[for='${r.id}'] .shipping-billing-name`)?.innerText?.trim() || "";
+
+      const l = q("label[for='" + r.id + "'] .shipping-billing-name");
+      return l ? (l.innerText || "").trim() : "";
     };
 
-    const isKuryr = () => getShipName().toLowerCase().includes("mykurýr");
-    const isPickup = () => getShipName().toLowerCase().includes("osob");
+    const isKuryr = () => getShipName().toLowerCase().indexOf("mykurýr") >= 0;
+    const isPickup = () => getShipName().toLowerCase().indexOf("osob") >= 0;
 
     const setTimeOptions = (futureOnly) => {
       const cur = t.value;
@@ -262,21 +252,31 @@
       }
     };
 
-    on(d, "input", () => { save(); validate(); });
-    on(d, "change", () => { save(); validate(); });
-    on(t, "change", () => { save(); validate(); });
+    on(d, "input", () => {
+      save();
+      validate();
+    });
+    on(d, "change", () => {
+      save();
+      validate();
+    });
+    on(t, "change", () => {
+      save();
+      validate();
+    });
 
+    // ✅ přepnutí dopravy
     on(document, "change", (e) => {
-      if (e.target?.matches("input[type=radio][name='shippingId']")) validate();
+      if (e.target && e.target.matches("input[type=radio][name='shippingId']")) {
+        setTimeout(validate, 50);
+        setTimeout(validate, 250);
+      }
     });
 
     save();
     validate();
   };
 
-  // ============================
-  // ✅ ZIP check – ONLY if recap contains "mykurýr"
-  // ============================
   const zipCheck = () => {
     if (!page.step2()) return;
 
@@ -288,7 +288,7 @@
     const needZip = () => {
       const recap = q("#shipping-billing-summary") || q("#summary-box") || null;
       const raw = recap && recap.innerText ? recap.innerText : "";
-      return raw.toLowerCase().includes("mykurýr");
+      return raw.toLowerCase().indexOf("mykurýr") >= 0;
     };
 
     let warn = q("#rkZipWarn");
@@ -305,7 +305,7 @@
     }
 
     const okZip = (p) => /^(60|61|62|63|64)\d{3}$/.test(String(p || "").replace(/\s/g, ""));
-    const activeZip = () => (chk?.checked && ship ? ship : bill);
+    const activeZip = () => (chk && chk.checked && ship ? ship : bill);
 
     const place = () => {
       const z = activeZip();
@@ -352,9 +352,6 @@
     setTimeout(validate, 1600);
   };
 
-  // ============================
-  // ✅ Order note fill
-  // ============================
   const orderNote = () => {
     if (!(page.step1() || page.step2() || page.step3())) return;
 
@@ -416,7 +413,8 @@
     const keys = [];
     for (let i = 0; i < sessionStorage.length; i++) {
       const k = sessionStorage.key(i);
-      if (k && (k.startsWith(RK.P) || k.startsWith(RK.N) || k === RK.DD || k === RK.DT)) keys.push(k);
+      if (k && (k.startsWith(RK.P) || k.startsWith(RK.N) || k === RK.DD || k === RK.DT))
+        keys.push(k);
     }
     keys.forEach((k) => sessionStorage.removeItem(k));
   };
