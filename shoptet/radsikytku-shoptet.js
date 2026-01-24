@@ -262,18 +262,9 @@
       }
     };
 
-    on(d, "input", () => {
-      save();
-      validate();
-    });
-    on(d, "change", () => {
-      save();
-      validate();
-    });
-    on(t, "change", () => {
-      save();
-      validate();
-    });
+    on(d, "input", () => { save(); validate(); });
+    on(d, "change", () => { save(); validate(); });
+    on(t, "change", () => { save(); validate(); });
 
     on(document, "change", (e) => {
       if (e.target?.matches("input[type=radio][name='shippingId']")) validate();
@@ -294,11 +285,10 @@
     const chk = q("#another-shipping");
     if (!bill) return;
 
-    // ✅ tvrdá varianta 100%: vezmeme jen blok rekapitulace dopravy/platby
     const needZip = () => {
       const recap = q("#shipping-billing-summary") || q("#summary-box") || null;
-      const txt = (recap?.innerText || "").toLowerCase();
-      return txt.includes("mykurýr");
+      const raw = recap && recap.innerText ? recap.innerText : "";
+      return raw.toLowerCase().includes("mykurýr");
     };
 
     let warn = q("#rkZipWarn");
@@ -324,7 +314,6 @@
     };
 
     const validate = () => {
-      // ✅ pokud není myKurýr -> vypnout kontrolu
       if (!needZip()) {
         warn.style.display = "none";
         lock.setZip(true);
@@ -364,7 +353,7 @@
   };
 
   // ============================
-  // ✅ Order note fill (step1/2/3)
+  // ✅ Order note fill
   // ============================
   const orderNote = () => {
     if (!(page.step1() || page.step2() || page.step3())) return;
@@ -422,9 +411,6 @@
     }, 250);
   };
 
-  // ============================
-  // ✅ Cleanup on thank you page
-  // ============================
   const clean = () => {
     if (!location.pathname.includes("/dekujeme")) return;
     const keys = [];
@@ -435,9 +421,6 @@
     keys.forEach((k) => sessionStorage.removeItem(k));
   };
 
-  // ============================
-  // ✅ Boot (run multiple times)
-  // ============================
   const boot = () => {
     lock.bindHardBlock();
     productNote();
